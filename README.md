@@ -36,5 +36,11 @@ Install via composer:
         'shared_store' => null,
 
         // time to live for locally cached data (in seconds) before the global state is synchronized again 
-        'local_ttl' => null,
+        'local_ttl' => 60,
+
+        // prefix for keys in shared store
+        'shared_store_pfx' => 'loc-sync-cache_',
+
+        // set file permission
+        'file_permission' => 0644,
     ],

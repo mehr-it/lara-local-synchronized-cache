@@ -58,6 +58,8 @@
 
 		protected $sapi;
 
+		protected $filePermission;
+
 		/**
 		 * Creates a new instance
 		 * @param string $directory The directory where to store the cache entries
@@ -66,8 +68,9 @@
 		 * @param bool $buffered True if to buffer in-memory
 		 * @param int $localTtl The TTL for locally cached items without checking for changes
 		 * @param string $sharedStatePrefix The shared store key prefix to use
+		 * @param int $filePermission File permission
 		 */
-		public function __construct($directory, \Illuminate\Cache\Repository $sharedStore, \Illuminate\Filesystem\Filesystem $files, $buffered = true, $localTtl = 60, $sharedStatePrefix = 'shared_state__') {
+		public function __construct($directory, \Illuminate\Cache\Repository $sharedStore, \Illuminate\Filesystem\Filesystem $files, $buffered = true, $localTtl = 60, $sharedStatePrefix = 'shared_state__', $filePermission = 0644) {
 			$this->sapi = php_sapi_name();
 
 			$this->directory         = rtrim($directory, '/');
@@ -76,13 +79,14 @@
 			$this->localTtl          = $localTtl;
 			$this->sharedStatePrefix = $sharedStatePrefix;
 			$this->buffered          = $buffered;
+			$this->filePermission    = $filePermission;
 		}
 
 
 		/**
 		 * Retrieve an item from the cache by key.
 		 *
-		 * @param  string|array $key
+		 * @param string|array $key
 		 * @return mixed
 		 */
 		public function get($key) {
@@ -96,9 +100,9 @@
 		/**
 		 * Store an item in the cache for a given number of minutes.
 		 *
-		 * @param  string $key
-		 * @param  mixed $value
-		 * @param  int $minutes
+		 * @param string $key
+		 * @param mixed $value
+		 * @param int $minutes
 		 */
 		public function put($key, $value, $minutes) {
 			// refresh local cache if TTL expired
@@ -107,7 +111,7 @@
 			$invalidations = [];
 			$this->write($key, $value, $minutes, true, $invalidations);
 
-			$this->locked($this->getLocalStateLockFilename(), function() use ($invalidations) {
+			$this->locked($this->getLocalStateLockFilename(), function () use ($invalidations) {
 				$this->publishState($invalidations);
 
 				$this->persistLocalState();
@@ -118,8 +122,8 @@
 		/**
 		 * Increment the value of an item in the cache.
 		 *
-		 * @param  string $key
-		 * @param  mixed $value
+		 * @param string $key
+		 * @param mixed $value
 		 * @return int The incremented value
 		 */
 		public function increment($key, $value = 1) {
@@ -133,8 +137,8 @@
 		/**
 		 * Decrement the value of an item in the cache.
 		 *
-		 * @param  string $key
-		 * @param  mixed $value
+		 * @param string $key
+		 * @param mixed $value
 		 * @return int|bool
 		 */
 		public function decrement($key, $value = 1) {
@@ -144,8 +148,8 @@
 		/**
 		 * Store an item in the cache indefinitely.
 		 *
-		 * @param  string $key
-		 * @param  mixed $value
+		 * @param string $key
+		 * @param mixed $value
 		 */
 		public function forever($key, $value) {
 			$this->put($key, $value, 0);
@@ -154,7 +158,7 @@
 		/**
 		 * Remove an item from the cache.
 		 *
-		 * @param  string $key
+		 * @param string $key
 		 * @return bool
 		 */
 		public function forget($key) {
@@ -262,7 +266,7 @@
 			try {
 				$stateData = $this->files->getRequire($stateFile);
 			}
-			catch(FileNotFoundException $ex) {
+			catch (FileNotFoundException $ex) {
 				// state data not existing, we'll handle this below
 			}
 
@@ -301,6 +305,8 @@
 			];
 
 			$this->files->put($stateFile, $this->serializePhp($state), true);
+			
+			$this->ensureFileHasCorrectPermissions($stateFile);
 
 			// invalidate opcache of state file, since it might have changed
 			opcache_invalidate($stateFile, true);
@@ -340,6 +346,8 @@
 				if ($localStateBase && $localStateVersion) {
 					$this->ensureCacheDirectoryExists($this->directory);
 					$this->files->put("{$this->directory}/global_gc_{$localStateBase}", $localStateVersion);
+					
+					$this->ensureFileHasCorrectPermissions("{$this->directory}/global_gc_{$localStateBase}");
 				}
 
 				if ($globalStateBase && $globalStateVersion) {
@@ -383,8 +391,8 @@
 				}
 
 				// here we apply all logged invalidations to local cache
-				foreach($logs as $currLog) {
-					foreach($currLog as $currInvalidation) {
+				foreach ($logs as $currLog) {
+					foreach ($currLog as $currInvalidation) {
 						$this->forgetLocalIfModified($currInvalidation[0], $currInvalidation[1]);
 					}
 				}
@@ -445,7 +453,7 @@
 					$value = $this->load($key);
 				}
 				else {
-					$value = $this->locked($this->getLockFilename($key), function() use ($key) {
+					$value = $this->locked($this->getLockFilename($key), function () use ($key) {
 						return $this->load($key);
 					});
 				}
@@ -503,7 +511,7 @@
 				$this->persist($key, $value, $expires, $invalidations);
 			}
 			else {
-				$this->locked($this->getLockFilename($key), function() use ($key, $value, $expires, &$invalidations) {
+				$this->locked($this->getLockFilename($key), function () use ($key, $value, $expires, &$invalidations) {
 					$this->persist($key, $value, $expires, $invalidations);
 				});
 			}
@@ -551,13 +559,28 @@
 		/**
 		 * Create the file cache directory if necessary.
 		 *
-		 * @param  string $path
+		 * @param string $path
 		 * @return void
 		 */
 		protected function ensureCacheDirectoryExists($path) {
 			if (!$this->files->exists(dirname($path))) {
 				$this->files->makeDirectory(dirname($path), 0777, true, true);
 			}
+		}
+
+		/**
+		 * Ensure the cache file has the correct permissions.
+		 *
+		 * @param string $path
+		 * @return void
+		 */
+		protected function ensureFileHasCorrectPermissions($path) {
+			if (is_null($this->filePermission) ||
+			    intval($this->files->chmod($path), 8) == $this->filePermission) {
+				return;
+			}
+
+			$this->files->chmod($path, $this->filePermission);
 		}
 
 		/**
@@ -576,13 +599,15 @@
 			// build data
 			$shouldSerialize = is_object($value);
 			$serializedValue = $shouldSerialize ? serialize($value) : $value;
-			$data = [
+			$data            = [
 				$expires,
 				$shouldSerialize,
 				$serializedValue,
 			];
 
 			$this->files->put($path, $this->serializePhp($data));
+			
+			$this->ensureFileHasCorrectPermissions($path);
 
 			// invalidate opcache
 			opcache_invalidate($path, true);
@@ -655,6 +680,9 @@
 				$fh = fopen($lockFile, 'w+');
 				if (!$fh)
 					throw new \RuntimeException("Could not open lock file \"$lockFile\"");
+				
+				// ensure correct file permissions
+				$this->ensureFileHasCorrectPermissions($lockFile);
 
 				if (!flock($fh, LOCK_EX))
 					throw new \RuntimeException("Could not obtain lock for \"$lockFile\"");
@@ -682,7 +710,7 @@
 			$currentBase = $this->readGlobalStateBase();
 
 			$tries = 0;
-			while(true) {
+			while (true) {
 
 				// make sure, current state is up to date
 				if ($this->stateBase != $currentBase)
