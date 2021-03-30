@@ -23,7 +23,7 @@
 					throw new InvalidArgumentException('Path must be configured for local-synchronized driver');
 
 				// get store for shared state
-				$sharedStore = Cache::store($config['shared_store']);
+				$sharedStore = Cache::store($config['shared_store'] ?? null);
 
 				// other settings with default
 				$buffered     = $config['buffered'] ?? true;
