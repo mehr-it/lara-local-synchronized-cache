@@ -349,7 +349,7 @@
 				// if we are using a state which is now obsolete, we remember the state for garbage collection
 				if ($localStateBase && $localStateVersion) {
 					$statePath = "{$this->directory}/global_gc_{$localStateBase}";
-					
+
 					$this->ensureCacheDirectoryExists($statePath);
 					$this->files->put($statePath, $localStateVersion);
 
@@ -569,19 +569,19 @@
 		 * @return void
 		 */
 		protected function ensureCacheDirectoryExists($path) {
-			
+
 			$path = dirname($path);
 
 			if (!$this->files->exists($path))
 				$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, true, true);
-			
+
+			// ensure correct permissions for root path
+			$path = $this->directory;
 			$this->ensureDirectoryHasCorrectPermissions($path);
-			
-			
+
 			// ensure correct permission for sub directories
 			$relSegments = explode('/', substr($path, strlen($this->directory) + 1));
-			$path = $this->directory;
-			foreach($relSegments as $currSegment) {
+			foreach ($relSegments as $currSegment) {
 				$path .= "/{$currSegment}";
 				$this->ensureDirectoryHasCorrectPermissions($path);
 			}
@@ -602,7 +602,7 @@
 
 			$this->files->chmod($path, $this->filePermission);
 		}
-		
+
 		/**
 		 * Ensure the directory has the correct permissions.
 		 *
@@ -610,7 +610,7 @@
 		 * @return void
 		 */
 		protected function ensureDirectoryHasCorrectPermissions($path) {
-			
+
 			if (is_null($this->directoryPermission) ||
 			    intval($this->files->chmod($path), 8) == $this->directoryPermission) {
 				return;
