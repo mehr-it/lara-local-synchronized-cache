@@ -572,19 +572,27 @@
 
 			$path = dirname($path);
 
-			if (!$this->files->exists($path))
-				$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, true, true);
-
-			// ensure correct permissions for root path
-			$path = $this->directory;
-			$this->ensureDirectoryHasCorrectPermissions($path);
-
-			// ensure correct permission for sub directories
+			// get segments for relative path
 			$relSegments = explode('/', substr($path, strlen($this->directory) + 1));
-			foreach ($relSegments as $currSegment) {
-				$path .= "/{$currSegment}";
-				$this->ensureDirectoryHasCorrectPermissions($path);
+
+			// build directory tree (from root)
+			$directoryTree = [
+				$this->directory,
+			];
+			$currPath = $this->directory;
+			foreach($relSegments as $currSegment) {
+				$directoryTree[] = ($currPath .= "/{$currSegment}");
 			}
+			
+			// create directories and ensure correct permission
+			foreach($directoryTree as $currPath) {
+				if (!$this->files->exists($currPath)) {
+					$this->files->makeDirectory($currPath, $this->directoryPermission ?: 0777, true, true);
+
+					$this->ensureDirectoryHasCorrectPermissions($currPath);
+				}
+			}
+						
 		}
 
 		/**
