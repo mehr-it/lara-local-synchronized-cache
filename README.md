@@ -43,4 +43,7 @@ Install via composer:
 
         // set file permission
         'file_permission' => 0644,
+
+        // set directory permission
+        'directory_permission' => 0755,
     ],

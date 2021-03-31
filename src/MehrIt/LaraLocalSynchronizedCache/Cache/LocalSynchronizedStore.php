@@ -60,6 +60,8 @@
 
 		protected $filePermission;
 
+		protected $directoryPermission;
+
 		/**
 		 * Creates a new instance
 		 * @param string $directory The directory where to store the cache entries
@@ -69,17 +71,19 @@
 		 * @param int $localTtl The TTL for locally cached items without checking for changes
 		 * @param string $sharedStatePrefix The shared store key prefix to use
 		 * @param int $filePermission File permission
+		 * @param int $directoryPermission Directory permission
 		 */
-		public function __construct($directory, \Illuminate\Cache\Repository $sharedStore, \Illuminate\Filesystem\Filesystem $files, $buffered = true, $localTtl = 60, $sharedStatePrefix = 'shared_state__', $filePermission = 0644) {
+		public function __construct($directory, \Illuminate\Cache\Repository $sharedStore, \Illuminate\Filesystem\Filesystem $files, $buffered = true, $localTtl = 60, $sharedStatePrefix = 'shared_state__', $filePermission = 0644, $directoryPermission = 0755) {
 			$this->sapi = php_sapi_name();
 
-			$this->directory         = rtrim($directory, '/');
-			$this->sharedStore       = $sharedStore;
-			$this->files             = $files;
-			$this->localTtl          = $localTtl;
-			$this->sharedStatePrefix = $sharedStatePrefix;
-			$this->buffered          = $buffered;
-			$this->filePermission    = $filePermission;
+			$this->directory           = rtrim($directory, '/');
+			$this->sharedStore         = $sharedStore;
+			$this->files               = $files;
+			$this->localTtl            = $localTtl;
+			$this->sharedStatePrefix   = $sharedStatePrefix;
+			$this->buffered            = $buffered;
+			$this->filePermission      = $filePermission;
+			$this->directoryPermission = $directoryPermission;
 		}
 
 
@@ -305,7 +309,7 @@
 			];
 
 			$this->files->put($stateFile, $this->serializePhp($state), true);
-			
+
 			$this->ensureFileHasCorrectPermissions($stateFile);
 
 			// invalidate opcache of state file, since it might have changed
@@ -346,7 +350,7 @@
 				if ($localStateBase && $localStateVersion) {
 					$this->ensureCacheDirectoryExists($this->directory);
 					$this->files->put("{$this->directory}/global_gc_{$localStateBase}", $localStateVersion);
-					
+
 					$this->ensureFileHasCorrectPermissions("{$this->directory}/global_gc_{$localStateBase}");
 				}
 
@@ -563,9 +567,26 @@
 		 * @return void
 		 */
 		protected function ensureCacheDirectoryExists($path) {
-			if (!$this->files->exists(dirname($path))) {
-				$this->files->makeDirectory(dirname($path), 0777, true, true);
+			
+			$path = dirname($path);
+			
+			$relPath = substr($path, strlen($this->directory) + 1);
+			
+			$relSegments = explode('/', $relPath);
+			
+			$path = $this->directory;
+			
+			
+			if (!$this->files->exists($path))
+				$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, true, true);
+			
+			foreach($relSegments as $currSegment) {
+				$path .= "/{$currSegment}";
+
+				if (!$this->files->exists($path))
+					$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, false, true);
 			}
+			
 		}
 
 		/**
@@ -606,7 +627,7 @@
 			];
 
 			$this->files->put($path, $this->serializePhp($data));
-			
+
 			$this->ensureFileHasCorrectPermissions($path);
 
 			// invalidate opcache
@@ -680,7 +701,7 @@
 				$fh = fopen($lockFile, 'w+');
 				if (!$fh)
 					throw new \RuntimeException("Could not open lock file \"$lockFile\"");
-				
+
 				// ensure correct file permissions
 				$this->ensureFileHasCorrectPermissions($lockFile);
 
