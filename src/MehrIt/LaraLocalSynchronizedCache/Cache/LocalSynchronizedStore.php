@@ -348,10 +348,12 @@
 
 				// if we are using a state which is now obsolete, we remember the state for garbage collection
 				if ($localStateBase && $localStateVersion) {
-					$this->ensureCacheDirectoryExists($this->directory);
-					$this->files->put("{$this->directory}/global_gc_{$localStateBase}", $localStateVersion);
+					$statePath = "{$this->directory}/global_gc_{$localStateBase}";
+					
+					$this->ensureCacheDirectoryExists($statePath);
+					$this->files->put($statePath, $localStateVersion);
 
-					$this->ensureFileHasCorrectPermissions("{$this->directory}/global_gc_{$localStateBase}");
+					$this->ensureFileHasCorrectPermissions($statePath);
 				}
 
 				if ($globalStateBase && $globalStateVersion) {
@@ -569,24 +571,20 @@
 		protected function ensureCacheDirectoryExists($path) {
 			
 			$path = dirname($path);
-			
-			$relPath = substr($path, strlen($this->directory) + 1);
-			
-			$relSegments = explode('/', $relPath);
-			
-			$path = $this->directory;
-			
-			
+
 			if (!$this->files->exists($path))
 				$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, true, true);
 			
+			$this->ensureDirectoryHasCorrectPermissions($path);
+			
+			
+			// ensure correct permission for sub directories
+			$relSegments = explode('/', substr($path, strlen($this->directory) + 1));
+			$path = $this->directory;
 			foreach($relSegments as $currSegment) {
 				$path .= "/{$currSegment}";
-
-				if (!$this->files->exists($path))
-					$this->files->makeDirectory($path, $this->directoryPermission ?: 0777, false, true);
+				$this->ensureDirectoryHasCorrectPermissions($path);
 			}
-			
 		}
 
 		/**
@@ -596,12 +594,29 @@
 		 * @return void
 		 */
 		protected function ensureFileHasCorrectPermissions($path) {
+
 			if (is_null($this->filePermission) ||
 			    intval($this->files->chmod($path), 8) == $this->filePermission) {
 				return;
 			}
 
 			$this->files->chmod($path, $this->filePermission);
+		}
+		
+		/**
+		 * Ensure the directory has the correct permissions.
+		 *
+		 * @param string $path
+		 * @return void
+		 */
+		protected function ensureDirectoryHasCorrectPermissions($path) {
+			
+			if (is_null($this->directoryPermission) ||
+			    intval($this->files->chmod($path), 8) == $this->directoryPermission) {
+				return;
+			}
+
+			$this->files->chmod($path, $this->directoryPermission);
 		}
 
 		/**
