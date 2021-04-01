@@ -218,7 +218,6 @@
 		}
 
 		public function invalidateAllLocal(): void {
-			debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 			
 			$this->localCache->clear();
 		}
