@@ -29,9 +29,6 @@ Install via composer:
         // path for cache data
         'path'   => storage_path('framework/cache/local-sync'),
 
-        // true if to buffer data in memory
-        'buffer' => true,
-
         // name of the cache used for synchronizing the global state
         'shared_store' => null,
 

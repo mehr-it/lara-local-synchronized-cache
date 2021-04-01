@@ -12,7 +12,7 @@
 	use Illuminate\Cache\ArrayStore;
 	use Illuminate\Cache\Repository;
 	use Illuminate\Filesystem\Filesystem;
-	use MehrIt\LaraLocalSynchronizedCache\Cache\LocalSynchronizedStore;
+	use MehrIt\LaraLocalSynchronizedCache\Cache\LocalSyncStore;
 	use MehrItLaraLocalSynchronizedCacheTests\Helper\FileSystemWithLog;
 	use MehrItLaraLocalSynchronizedCacheTests\Unit\TestCase;
 
@@ -73,44 +73,13 @@
 
 
 		protected function checkValuePersisted($directory, $key, $expectedValue, Repository $sharedStore = null) {
-			$s = new LocalSynchronizedStore($directory, $sharedStore ?: $this->sharedStore, new Filesystem());
+			echo ('CREATE READ STORE');
+			
+			$s = new LocalSyncStore($directory, $sharedStore ?: $this->sharedStore, new Filesystem());
 
 			$this->assertEquals($expectedValue, $s->get($key));
 		}
-
-
-		public function testPutGet_buffered() {
-
-			$d1 = $this->createTempDir();
-
-
-			$fs = new FileSystemWithLog();
-
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs);
-
-			$s->put('x', 12, 0);
-			$s->put('y', ['x' => 12], 14);
-			$s->put('z', new \stdClass(), 1);
-			$this->checkValuePersisted($d1, 'x', 12);
-			$this->checkValuePersisted($d1, 'y', ['x' => 12]);
-			$this->checkValuePersisted($d1, 'z', new \stdClass());
-
-			// clear file system log
-			$fs->clearLog();
-
-			// read value
-			$this->assertEquals(12, $s->get('x'));
-			$this->assertEquals(['x' => 12], $s->get('y'));
-			$this->assertEquals(new \stdClass(), $s->get('z'));
-			$this->assertEmpty($fs->log('read'), 'Store should not read from file system for retrieving buffered value');
-
-			// read value again
-			$this->assertEquals(12, $s->get('x'));
-			$this->assertEquals(12, $s->get('x'));
-			$this->assertEquals(['x' => 12], $s->get('y'));
-			$this->assertEquals(new \stdClass(), $s->get('z'));
-			$this->assertEmpty($fs->log('read'), 'Store should not read from file system for retrieving buffered value');
-		}
+		
 
 		public function testPutGet_unbuffered() {
 
@@ -118,7 +87,7 @@
 
 			$fs = new FileSystemWithLog();
 
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs, false);
+			$s = new LocalSyncStore($d1, $this->sharedStore, $fs);
 
 			$s->put('x', 12, 0);
 			$s->put('y', ['x' => 12], 14);
@@ -133,98 +102,11 @@
 			$this->assertEquals(12, $s->get('x'));
 			$this->assertEquals(['x' => 12], $s->get('y'));
 			$this->assertEquals(new \stdClass(), $s->get('z'));
-			$this->assertCount(3, $fs->log('read'), 'Store should be read from file system');
 
 			$this->assertEquals(12, $s->get('x'));
 			$this->assertEquals(['x' => 12], $s->get('y'));
 			$this->assertEquals(new \stdClass(), $s->get('z'));
-			$this->assertCount(6, $fs->log('read'), 'Store should be read from file system');
 
-		}
-
-		public function testPutForget_buffered() {
-
-			$d1 = $this->createTempDir();
-
-
-			$fs = new FileSystemWithLog();
-
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs);
-
-			$s->put('x', 12, 0);
-			$s->put('y', 9, 0);
-			$this->checkValuePersisted($d1, 'x', 12);
-			$this->checkValuePersisted($d1, 'y', 9);
-
-			$s->forget('x');
-			$this->checkValuePersisted($d1, 'x', null);
-			$this->checkValuePersisted($d1, 'y', 9);
-
-
-			// read value
-			$this->assertNull($s->get('x'));
-			$this->assertEquals(9, $s->get('y'));
-
-			// read value again
-			$this->assertNull($s->get('x'));
-			$this->assertEquals(9, $s->get('y'));
-		}
-
-		public function testPutForget_unbuffered() {
-
-			$d1 = $this->createTempDir();
-
-
-			$fs = new FileSystemWithLog();
-
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs, false);
-
-			$s->put('x', 12, 0);
-			$s->put('y', 9, 0);
-			$this->checkValuePersisted($d1, 'x', 12);
-			$this->checkValuePersisted($d1, 'y', 9);
-
-			$s->forget('x');
-			$this->checkValuePersisted($d1, 'x', null);
-			$this->checkValuePersisted($d1, 'y', 9);
-
-
-			// read value
-			$this->assertNull($s->get('x'));
-			$this->assertEquals(9, $s->get('y'));
-
-			// read value again
-			$this->assertNull($s->get('x'));
-			$this->assertEquals(9, $s->get('y'));
-
-		}
-
-		public function testPutFlush_buffered() {
-
-			$d1 = $this->createTempDir();
-
-
-			$fs = new FileSystemWithLog();
-
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs);
-
-			$s->put('x', 12, 0);
-			$s->put('y', 9, 0);
-			$this->checkValuePersisted($d1, 'x', 12);
-			$this->checkValuePersisted($d1, 'y', 9);
-
-			$s->flush();
-			$this->checkValuePersisted($d1, 'x', null);
-			$this->checkValuePersisted($d1, 'y', null);
-
-
-			// read value
-			$this->assertNull($s->get('x'));
-			$this->assertNull($s->get('y'));
-
-			// read value again
-			$this->assertNull($s->get('x'));
-			$this->assertNull($s->get('y'));
 		}
 
 		public function testPutFlush_unbuffered() {
@@ -234,7 +116,7 @@
 
 			$fs = new FileSystemWithLog();
 
-			$s = new LocalSynchronizedStore($d1, $this->sharedStore, $fs, false);
+			$s = new LocalSyncStore($d1, $this->sharedStore, $fs);
 
 			$s->put('x', 12, 0);
 			$s->put('y', 9, 0);
@@ -265,7 +147,7 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create two stores and init them with different values
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1);
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1);
 			$s1->put('x', 12, 0);
 			$s1->put('y', 23, 0);
 			$s1->put('z', 34, 0);
@@ -275,7 +157,7 @@
 			$s1->put('d', 100, 0);
 			$s1->put('e', 100, 0);
 
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$s2->put('x', 1, 0);
 			$s2->put('y', 4, 0);
 			$s2->put('a', 99, 0);
@@ -286,7 +168,7 @@
 
 
 			// re-create a new store instance for first store and read values (all values changed in s2, should be invalidated and therefore return null)
-			$s1New = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1);
+			$s1New = new LocalSyncStore($d1, $this->sharedStore, $fs1);
 			$this->assertNull($s1New->get('x')); // invalidated because set in s2
 			$this->assertNull($s1New->get('y')); // invalidated because set in s2
 			$this->assertEquals(34, $s1New->get('z')); // NOT invalidated because not modified by s2
@@ -298,7 +180,7 @@
 
 
 			// re-create a new store instance for second store and check assert values still present
-			$s2New = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2New = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$this->assertEquals(1, $s2New->get('x'));
 			$this->assertEquals(4, $s2New->get('y'));
 			$this->assertEquals(99, $s2New->get('a'));
@@ -318,8 +200,8 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create two stores and init them with different values
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1, true, 1);
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1, 1);
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 
 
 			// modify in store 1
@@ -369,7 +251,7 @@
 			$this->assertNull($s1->get('e')); // invalidated because decremented in s2
 
 
-			$s2New = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2New = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$this->assertEquals(1, $s2New->get('x'));
 			$this->assertEquals(4, $s2New->get('y'));
 			$this->assertEquals(99, $s2New->get('a'));
@@ -389,7 +271,7 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create two stores and init them with different values
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1);
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1);
 			$s1->put('x', 12, 0);
 			$s1->put('y', 23, 0);
 			$s1->put('z', 34, 0);
@@ -399,12 +281,12 @@
 			$s1->put('d', 100, 0);
 			$s1->put('e', 100, 0);
 
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$s2->flush();
 
 
 			// re-create a new store instance for first store and read values (all values changed in s2, should be invalidated and therefore return null)
-			$s1New = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1);
+			$s1New = new LocalSyncStore($d1, $this->sharedStore, $fs1);
 			$this->assertNull($s1New->get('x'));
 			$this->assertNull($s1New->get('y'));
 			$this->assertNull($s1New->get('z'));
@@ -416,7 +298,7 @@
 
 
 			// re-create a new store instance for second store and check assert values still present
-			$s2New = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2New = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$this->assertNull($s2New->get('x'));
 			$this->assertNull($s2New->get('y'));
 			$this->assertNull($s2New->get('a'));
@@ -435,8 +317,8 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create two stores and init them with different values
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1, true, 1);
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1, 1);
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 
 
 			// modify in store 1
@@ -480,7 +362,7 @@
 			$this->assertNull($s1->get('e'));
 
 
-			$s2New = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2);
+			$s2New = new LocalSyncStore($d2, $this->sharedStore, $fs2);
 			$this->assertNull($s2New->get('x'));
 			$this->assertNull($s2New->get('y'));
 			$this->assertNull($s2New->get('a'));
@@ -500,7 +382,7 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create store
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1, true, 1);
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1, 1);
 			$s1->put('x', 12, 0);
 			$s1->put('y', 23, 0);
 
@@ -515,7 +397,7 @@
 			sleep(2);
 
 			// create another store which should re-init a global state
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2, true, 0);
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2,  0);
 			$s2->put('x', 1, 0);
 
 			// validate values
@@ -534,13 +416,13 @@
 			$fs2 = new FileSystemWithLog();
 
 			// create store
-			$s1 = new LocalSynchronizedStore($d1, $this->sharedStore, $fs1, true, 1, 'ss');
+			$s1 = new LocalSyncStore($d1, $this->sharedStore, $fs1, 1, 'ss');
 			$s1->put('x', 12, 0);
 			$s1->put('y', 23, 0);
 
 
 			// create another store which modifies store
-			$s2 = new LocalSynchronizedStore($d2, $this->sharedStore, $fs2, true, 0, 'ss');
+			$s2 = new LocalSyncStore($d2, $this->sharedStore, $fs2, 0, 'ss');
 			$s2->put('x', 1, 0);
 			$s2->put('y', 4, 0);
 
