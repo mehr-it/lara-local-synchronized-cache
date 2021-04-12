@@ -12,6 +12,7 @@
 	use Illuminate\Filesystem\Filesystem;
 	use MehrIt\LaraLocalSynchronizedCache\Cache\Concerns\SharedState;
 	use MehrIt\PhpCache\PhpCache;
+	use Throwable;
 
 	class LocalSyncStore implements Store
 	{
@@ -242,9 +243,16 @@
 		 */
 		protected function forgetLocalIfModified(string $key, $valueHash): void {
 
-			$value = $this->localCache->get($key);
+			try {
+				$currentValueHash = $this->valueHash($this->localCache->get($key));
+			}
+			catch (Throwable $ex) {
+				// if unserialization fails, we stop
+				$currentValueHash = null;
+			}
+			
 
-			if ($this->valueHash($value) != $valueHash)
+			if ($currentValueHash != $valueHash)
 				$this->localCache->delete($key);
 		}
 
