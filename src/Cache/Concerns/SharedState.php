@@ -37,6 +37,8 @@
 		protected $stateVersion;
 
 		protected $stateBase;
+		
+		protected $maxCatchupVersions = 100;
 
 
 		/**
@@ -159,11 +161,15 @@
 			elseif ($globalStateVersion > $localStateVersion) {
 				// the global state version has changed => try to apply invalidations
 
-				$logs = $this->retrieveModificationLogs($globalStateBase, $localStateVersion + 1, $globalStateVersion);
+				$logs = [];
+				// we only try to catch up with global state, if not too many missing
+				if ($globalStateVersion - $localStateVersion <= $this->maxCatchupVersions)
+					$logs = $this->retrieveModificationLogs($globalStateBase, $localStateVersion + 1, $globalStateVersion);
 
 				// If we could not receive all log entries, we can not update incrementally to global state.
-				// We import the global state and invalidate the local cache
-				if (count(array_filter($logs)) != $globalStateVersion - $localStateVersion) {
+				// We import the global state and invalidate the local cache.
+				// The same if no logs were fetched because too many versions to catch up
+				if (!$logs || count(array_filter($logs)) != $globalStateVersion - $localStateVersion) {
 
 					// import global state
 					$this->stateBase    = $globalStateBase;
@@ -178,14 +184,22 @@
 				}
 
 				// here we apply all logged invalidations to local cache
+				$mergedInvalidations = [];
 				foreach ($logs as $currLog) {
 					foreach ($currLog as $currInvalidation) {
 						$key = $currInvalidation[0] ?? null;
 													
 						if ($key !== null)
-							$this->forgetLocalIfModified($currInvalidation[0], $currInvalidation[1]);
+							$mergedInvalidations[$key] = $currInvalidation[1];
 					}
 				}
+				foreach($mergedInvalidations as $key => $valueHash) {
+					$this->forgetLocalIfModified($key, $valueHash);
+				}
+
+				// we are now up-to date with global state
+				$this->stateBase    = $globalStateBase;
+				$this->stateVersion = $globalStateVersion;
 				
 				$this->persistLocalState();
 			}

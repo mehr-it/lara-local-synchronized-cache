@@ -31,8 +31,9 @@
 				$sharedPrefix        = $config['shared_store_pfx'] ?? 'loc-sync-cache_';
 				$filePermission      = $config['file_permission'] ?? 0644;
 				$directoryPermission = $config['directory_permission'] ?? 0755;
+				$maxCatchupVersions  = $config['max_catchup_versions'] ?? 100;
 
-				$lsStore = new LocalSyncStore($config['path'], $sharedStore, $app['files'], $localTTL, $sharedPrefix, $filePermission, $directoryPermission);
+				$lsStore = new LocalSyncStore($config['path'], $sharedStore, $app['files'], $localTTL, $sharedPrefix, $filePermission, $directoryPermission, $maxCatchupVersions);
 
 				if ($config['listen_events'] ?? true) {
 					Event::listen(JobProcessing::class, function () use ($lsStore) {

@@ -35,7 +35,7 @@
 		 * @param int $filePermission File permission
 		 * @param int $directoryPermission Directory permission
 		 */
-		public function __construct($directory, Repository $sharedStore, Filesystem $files, $localTtl = 60, $sharedStatePrefix = 'shared_state__', $filePermission = 0644, $directoryPermission = 0755) {
+		public function __construct($directory, Repository $sharedStore, Filesystem $files, $localTtl = 60, $sharedStatePrefix = 'shared_state__', $filePermission = 0644, $directoryPermission = 0755, $maxCatchupVersion = 100) {
 
 			$this->sharedStore       = $sharedStore;
 			$this->localTtl          = $localTtl;
@@ -52,8 +52,9 @@
 			}
 
 			// create PHP cache instances for local cache and state
-			$this->localCache      = new PhpCache("{$directory}/local", $filePermission, $directoryPermission, false);
-			$this->localStateCache = new PhpCache("{$directory}/state", $filePermission, $directoryPermission, false);
+			$this->localCache         = new PhpCache("{$directory}/local", $filePermission, $directoryPermission, false);
+			$this->localStateCache    = new PhpCache("{$directory}/state", $filePermission, $directoryPermission, false);
+			$this->maxCatchupVersions = $maxCatchupVersion;
 		}
 
 
